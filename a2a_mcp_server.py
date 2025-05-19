@@ -17,6 +17,8 @@ import os
 import uuid
 from typing import Any, AsyncGenerator, Dict, List, Optional, Union
 import json
+import logging
+import atexit
 
 import httpx
 from fastmcp import Context, FastMCP
@@ -48,14 +50,48 @@ from common.types import (
 )
 from common.client.client import A2AClient
 from common.server.task_manager import InMemoryTaskManager
+from persistence_utils import save_to_json, load_from_json
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Create a FastMCP server
 mcp = FastMCP("A2A Bridge Server")
 
-# Store for A2A agents that have been registered
+# File paths for persistent storage
+DATA_DIR = os.environ.get("A2A_MCP_DATA_DIR", ".")
+REGISTERED_AGENTS_FILE = os.path.join(DATA_DIR, "registered_agents.json")
+TASK_AGENT_MAPPING_FILE = os.path.join(DATA_DIR, "task_agent_mapping.json")
+
+# Load stored data from disk if it exists
+stored_agents = load_from_json(REGISTERED_AGENTS_FILE)
+stored_tasks = load_from_json(TASK_AGENT_MAPPING_FILE)
+
+# Initialize in-memory dictionaries with stored data
 registered_agents = {}
-# Store task_id to agent_url mappings for later retrieval
 task_agent_mapping = {}
+
+# Register function to save data on exit
+def save_data_on_exit():
+    logger.info("Saving data before exit...")
+    # Convert registered_agents to a serializable format
+    agents_data = {url: agent.model_dump() for url, agent in registered_agents.items()}
+    save_to_json(agents_data, REGISTERED_AGENTS_FILE)
+    save_to_json(task_agent_mapping, TASK_AGENT_MAPPING_FILE)
+    logger.info("Data saved successfully")
+
+atexit.register(save_data_on_exit)
+
+# Periodically save data (every 5 minutes)
+async def periodic_save():
+    while True:
+        await asyncio.sleep(300)  # 5 minutes
+        logger.info("Performing periodic data save...")
+        agents_data = {url: agent.model_dump() for url, agent in registered_agents.items()}
+        save_to_json(agents_data, REGISTERED_AGENTS_FILE)
+        save_to_json(task_agent_mapping, TASK_AGENT_MAPPING_FILE)
+        logger.info("Periodic save completed")
 
 # Load transport configuration from environment variables
 DEFAULT_TRANSPORT = "stdio"
@@ -293,6 +329,10 @@ async def register_agent(url: str, ctx: Context) -> Dict[str, Any]:
         
         registered_agents[url] = agent_info
         
+        # Save to disk immediately
+        agents_data = {url: agent.model_dump() for url, agent in registered_agents.items()}
+        save_to_json(agents_data, REGISTERED_AGENTS_FILE)
+        
         await ctx.info(f"Successfully registered agent: {agent_card.name}")
         return {
             "status": "success",
@@ -350,6 +390,11 @@ async def unregister_agent(url: str, ctx: Context = None) -> Dict[str, Any]:
         # Now remove the task mappings
         for task_id in tasks_to_remove:
             del task_agent_mapping[task_id]
+        
+        # Save changes to disk immediately
+        agents_data = {url: agent.model_dump() for url, agent in registered_agents.items()}
+        save_to_json(agents_data, REGISTERED_AGENTS_FILE)
+        save_to_json(task_agent_mapping, TASK_AGENT_MAPPING_FILE)
         
         if ctx:
             await ctx.info(f"Successfully unregistered agent: {agent_name}")
@@ -419,6 +464,9 @@ async def send_message(
         
         # Send the task with the payload
         result = await client.send_task(payload)
+        
+        # Save task mapping to disk
+        save_to_json(task_agent_mapping, TASK_AGENT_MAPPING_FILE)
         
         # Debug: Print the raw response for analysis
         if ctx:
@@ -735,6 +783,9 @@ async def send_message_stream(
         # Store the mapping of task_id to agent_url for later reference
         task_agent_mapping[task_id] = agent_url
         
+        # Save the task mapping to disk
+        save_to_json(task_agent_mapping, TASK_AGENT_MAPPING_FILE)
+        
         # Create the message
         a2a_message = Message(
             role="user",
@@ -941,6 +992,12 @@ async def main_async():
     """
     Main async function to start both the MCP and A2A servers.
     """
+    # Load stored data into memory
+    load_registered_agents()
+    
+    # Start periodic save task
+    asyncio.create_task(periodic_save())
+    
     # Set up and start the A2A server
     a2a_server = setup_a2a_server()
     a2a_task = asyncio.create_task(a2a_server.start_async())
@@ -978,6 +1035,23 @@ async def main_async():
     await asyncio.gather(a2a_task, mcp_task)
 
 
+def load_registered_agents():
+    """Load registered agents from stored data on startup."""
+    global registered_agents, task_agent_mapping
+    
+    logger.info("Loading saved data...")
+    
+    # Load agents data
+    agents_data = load_from_json(REGISTERED_AGENTS_FILE)
+    for url, agent_data in agents_data.items():
+        registered_agents[url] = AgentInfo(**agent_data)
+    
+    # Load task mappings
+    task_agent_mapping = load_from_json(TASK_AGENT_MAPPING_FILE)
+    
+    logger.info(f"Loaded {len(registered_agents)} agents and {len(task_agent_mapping)} task mappings")
+
+
 def main():
     """
     Main entry point.
@@ -994,6 +1068,9 @@ def main():
     print(f"A2A Server Configuration:")
     print(f"- Host: {A2A_HOST}")
     print(f"- Port: {A2A_PORT}")
+    print(f"Data Storage:")
+    print(f"- Registered Agents: {REGISTERED_AGENTS_FILE}")
+    print(f"- Task Agent Mapping: {TASK_AGENT_MAPPING_FILE}")
     
     asyncio.run(main_async())
 

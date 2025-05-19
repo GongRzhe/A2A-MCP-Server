@@ -1,0 +1,12 @@
+{
+    "http://localhost:10000/": {
+        "url": "http://localhost:10000/",
+        "name": "Currency Agent",
+        "description": "Helps with exchange rates for currencies"
+    },
+    "http://localhost:10002/": {
+        "url": "http://localhost:10002/",
+        "name": "Reimbursement Agent",
+        "description": "This agent handles the reimbursement process for the employees given the amount and purpose of the reimbursement."
+    }
+}
