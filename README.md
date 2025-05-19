@@ -67,7 +67,7 @@ pip install a2a-mcp-server
 
 2. Set up a virtual environment:
    ```bash
-   uvx venv .venv
+   python -m venv .venv
    source .venv/bin/activate  # On Windows: .venv\Scripts\activate
    ```
 
