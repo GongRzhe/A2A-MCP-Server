@@ -1,0 +1,51 @@
+[project]
+name = "a2a_mcp_server"
+version = "0.1.0"
+description = "A bridge server that connects Model Context Protocol (MCP) with Agent-to-Agent (A2A) protocol"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "Apache-2.0"}
+authors = [
+    {name = "GongRzhe", email = "gongrzhe@gmail.com"}  # Replace with your actual email
+]
+maintainers = [
+    {name = "GongRzhe", email = "gongrzhe@gmail.com"}  # Replace with your actual email
+]
+keywords = ["MCP", "A2A", "Agent-to-Agent", "Model Context Protocol", "AI", "LLM"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "httpx>=0.28.1",
+    "httpx-sse>=0.4.0",
+    "jwcrypto>=1.5.6",
+    "pydantic>=2.10.6",
+    "pyjwt>=2.10.1",
+    "sse-starlette>=2.2.1",
+    "starlette>=0.46.1",
+    "typing-extensions>=4.12.2",
+    "uvicorn>=0.34.0",
+    "fastmcp>=2.3.4",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/GongRzhe/A2A-MCP-Server"
+"Bug Tracker" = "https://github.com/GongRzhe/A2A-MCP-Server/issues"
+"Repository" = "https://github.com/GongRzhe/A2A-MCP-Server"
+"Documentation" = "https://github.com/GongRzhe/A2A-MCP-Server/blob/main/README.md"
+
+[tool.hatch.build.targets.wheel]
+packages = ["common"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3.5", "pytest-mock>=3.14.0", "ruff>=0.11.2"]
