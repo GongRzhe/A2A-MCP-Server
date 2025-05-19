@@ -21,6 +21,11 @@ By bridging these protocols, this server allows MCP clients (like Claude) to dis
 
 ![agent](public/agent.png)
 
+`also support cloud deployed Agent`
+
+![cloudAgent](https://github.com/user-attachments/assets/481cbf01-95a0-4b0a-9ac5-898aef66a944)
+
+
 #### 2, Use Claude to Register the Currency Agent 
 
 ![register](public/register.png)
