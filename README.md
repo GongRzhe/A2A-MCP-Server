@@ -157,14 +157,10 @@ Add the following to the `mcpServers` section of your `claude_desktop_config.jso
 
 ```json
 "a2a": {
-  "command": "python",
+  "command": "uvx",
   "args": [
-    "-m",
-    "a2a_mcp_server"
-  ],
-  "env": {
-    "MCP_TRANSPORT": "stdio"
-  }
+    "a2a-mcp-server"
+  ]
 }
 ```
 
@@ -212,14 +208,10 @@ Here's an example of a complete `claude_desktop_config.json` file with the A2A-M
 {
   "mcpServers": {
     "a2a": {
-      "command": "python",
+      "command": "uvx",
       "args": [
-        "-m",
-        "a2a_mcp_server"
-      ],
-      "env": {
-        "MCP_TRANSPORT": "stdio"
-      }
+        "a2a-mcp-server"
+      ]
     }
   }
 }
