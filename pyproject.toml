@@ -1,6 +1,6 @@
 [project]
 name = "a2a_mcp_server"
-version = "0.1.1"
+version = "0.1.2"
 description = "A bridge server that connects Model Context Protocol (MCP) with Agent-to-Agent (A2A) protocol"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -52,6 +52,7 @@ build-backend = "hatchling.build"
 [tool.hatch.build]
 include = [
     "a2a_mcp_server.py",
+    "persistence_utils.py",
     "common/**/*.py",
 ]
 
