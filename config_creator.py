@@ -87,10 +87,9 @@ def create_pypi_config():
     }
     
     config = {
-        "command": "python",
+        "command": "uvx",
         "args": [
-            "-m",
-            "a2a_mcp_server"
+            "a2a-mcp-server"
         ],
         "env": env
     }

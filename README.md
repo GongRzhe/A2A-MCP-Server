@@ -54,7 +54,7 @@ By bridging these protocols, this server allows MCP clients (like Claude) to dis
 ### Option 1: Install from PyPI
 
 ```bash
-pip install a2a_mcp_server
+pip install a2a-mcp-server
 ```
 
 ### Option 2: Local Installation
@@ -67,7 +67,7 @@ pip install a2a_mcp_server
 
 2. Set up a virtual environment:
    ```bash
-   python -m venv .venv
+   uvx venv .venv
    source .venv/bin/activate  # On Windows: .venv\Scripts\activate
    ```
 
@@ -125,10 +125,10 @@ To specify the transport type:
 ```bash
 # Using environment variable
 export MCP_TRANSPORT="streamable-http"
-python -m a2a_mcp_server
+uvx a2a-mcp-server
 
 # Or directly in the command
-MCP_TRANSPORT=streamable-http python -m a2a_mcp_server
+MCP_TRANSPORT=streamable-http uvx a2a-mcp-server
 ```
 
 ## Running the Server
@@ -137,26 +137,10 @@ MCP_TRANSPORT=streamable-http python -m a2a_mcp_server
 
 ```bash
 # Using default settings (stdio transport)
-python -m a2a_mcp_server
+uvx a2a-mcp-server
 
 # Using HTTP transport on specific host and port
-MCP_TRANSPORT=streamable-http MCP_HOST=127.0.0.1 MCP_PORT=8080 python -m a2a_mcp_server
-```
-
-### As a Python Module
-
-```python
-from a2a_mcp_server import create_server
-import os
-
-# Set environment variables for configuration
-os.environ["MCP_TRANSPORT"] = "streamable-http"
-os.environ["MCP_HOST"] = "127.0.0.1"
-os.environ["MCP_PORT"] = "8000"
-
-# Create and run the server
-mcp = create_server()
-mcp.run()
+MCP_TRANSPORT=streamable-http MCP_HOST=127.0.0.1 MCP_PORT=8080 uvx a2a-mcp-server
 ```
 
 ## Configuring in Claude Desktop
@@ -210,9 +194,6 @@ Replace `C:\\path\\to\\` with the actual paths on your system.
 This repository includes a `config_creator.py` script to help you generate the configuration:
 
 ```bash
-# If installed from PyPI
-python -m a2a_mcp_server.config_creator
-
 # If using local installation
 python config_creator.py
 ```
@@ -239,16 +220,6 @@ Here's an example of a complete `claude_desktop_config.json` file with the A2A-M
       "env": {
         "MCP_TRANSPORT": "stdio"
       }
-    },
-    "github": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-github"
-      ],
-      "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "your-token-here"
-      }
     }
   }
 }
@@ -262,7 +233,7 @@ Claude can use A2A agents through the MCP tools provided by this server. Here's 
 
 1. For Claude Web: Start the MCP server with the streamable-http transport:
    ```bash
-   MCP_TRANSPORT=streamable-http MCP_HOST=127.0.0.1 MCP_PORT=8000 python -m a2a_mcp_server
+   MCP_TRANSPORT=streamable-http MCP_HOST=127.0.0.1 MCP_PORT=8000 uvx a2a-mcp-server
    ```
 
 2. For Claude Web: In Claude web interface, enable the MCP URL connection in your Tools menu.
@@ -294,7 +265,7 @@ Cursor IDE can connect to MCP servers to add tools to its AI assistant:
 
 1. Run your A2A MCP server with the streamable-http transport:
    ```bash
-   MCP_TRANSPORT=streamable-http MCP_HOST=127.0.0.1 MCP_PORT=8000 python -m a2a_mcp_server
+   MCP_TRANSPORT=streamable-http MCP_HOST=127.0.0.1 MCP_PORT=8000 uvx a2a-mcp-server
    ```
 
 2. In Cursor IDE, go to Settings > AI > MCP Servers
@@ -309,7 +280,7 @@ Windsurf is a browser with built-in MCP support:
 
 1. Run your A2A MCP server with the streamable-http transport:
    ```bash
-   MCP_TRANSPORT=streamable-http MCP_HOST=127.0.0.1 MCP_PORT=8000 python -m a2a_mcp_server
+   MCP_TRANSPORT=streamable-http MCP_HOST=127.0.0.1 MCP_PORT=8000 uvx a2a-mcp-server
    ```
 
 2. In Windsurf browser, go to Settings > MCP Connections

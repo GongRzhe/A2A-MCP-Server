@@ -1,15 +1,15 @@
 [project]
 name = "a2a_mcp_server"
-version = "0.1.0"
+version = "0.1.1"
 description = "A bridge server that connects Model Context Protocol (MCP) with Agent-to-Agent (A2A) protocol"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "Apache-2.0"}
 authors = [
-    {name = "GongRzhe", email = "gongrzhe@gmail.com"}  # Replace with your actual email
+    {name = "GongRzhe", email = "gongrzhe@gmail.com"}
 ]
 maintainers = [
-    {name = "GongRzhe", email = "gongrzhe@gmail.com"}  # Replace with your actual email
+    {name = "GongRzhe", email = "gongrzhe@gmail.com"}
 ]
 keywords = ["MCP", "A2A", "Agent-to-Agent", "Model Context Protocol", "AI", "LLM"]
 classifiers = [
@@ -40,12 +40,24 @@ dependencies = [
 "Repository" = "https://github.com/GongRzhe/A2A-MCP-Server"
 "Documentation" = "https://github.com/GongRzhe/A2A-MCP-Server/blob/main/README.md"
 
-[tool.hatch.build.targets.wheel]
-packages = ["common"]
+# This section creates the CLI command
+[project.scripts]
+a2a-mcp-server = "a2a_mcp_server:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+# This section tells hatchling to include both your main script and the common module
+[tool.hatch.build]
+include = [
+    "a2a_mcp_server.py",
+    "common/**/*.py",
+]
+
+# No longer needed - using the include directive above
+# [tool.hatch.build.targets.wheel]
+# packages = ["common"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.3.5", "pytest-mock>=3.14.0", "ruff>=0.11.2"]
