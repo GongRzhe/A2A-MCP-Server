@@ -1,0 +1,29 @@
+# Smithery configuration file: https://smithery.ai/docs/build/project-config
+
+startCommand:
+  type: stdio
+  commandFunction:
+    # A JS function that produces the CLI command based on the given config to start the MCP on stdio.
+    |-
+    (config) => ({ command: 'python', args: ['a2a_mcp_server.py'], env: { MCP_TRANSPORT: config.mcpTransport, MCP_HOST: config.mcpHost, MCP_PORT: config.mcpPort.toString() } })
+  configSchema:
+    # JSON Schema defining the configuration options for the MCP.
+    type: object
+    required: []
+    properties:
+      mcpTransport:
+        type: string
+        default: stdio
+        description: Transport type for MCP communication
+      mcpHost:
+        type: string
+        default: 0.0.0.0
+        description: Host for the MCP server
+      mcpPort:
+        type: number
+        default: 8000
+        description: Port for the MCP server (ignored for stdio)
+  exampleConfig:
+    mcpTransport: stdio
+    mcpHost: 0.0.0.0
+    mcpPort: 8000
