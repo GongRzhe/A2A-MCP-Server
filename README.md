@@ -2,6 +2,7 @@
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 ![](https://badge.mcpx.dev?type=server 'MCP Server')
+[![smithery badge](https://smithery.ai/badge/@GongRzhe/A2A-MCP-Server)](https://smithery.ai/server/@GongRzhe/A2A-MCP-Server)
 
 A mcp server that bridges the Model Context Protocol (MCP) with the Agent-to-Agent (A2A) protocol, enabling MCP-compatible AI assistants (like Claude) to seamlessly interact with A2A agents.
 
@@ -55,6 +56,14 @@ By bridging these protocols, this server allows MCP clients (like Claude) to dis
   - Configure transport type using MCP_TRANSPORT environment variable
 
 ## Installation
+
+### Installing via Smithery
+
+To install A2A Bridge Server for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@GongRzhe/A2A-MCP-Server):
+
+```bash
+npx -y @smithery/cli install @GongRzhe/A2A-MCP-Server --client claude
+```
 
 ### Option 1: Install from PyPI
 
