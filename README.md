@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/gongrzhe-a2a-mcp-server-badge.png)](https://mseep.ai/app/gongrzhe-a2a-mcp-server)
+
 # A2A MCP Server
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
