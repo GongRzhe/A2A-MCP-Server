@@ -33,6 +33,8 @@ from common.types import (
     Artifact,
     DataPart,
     Message,
+    MessageSendResponse,
+    MessageStreamResponse,
     Part,
     TextPart,
     TaskState,
@@ -47,7 +49,7 @@ from common.types import (
     GetTaskRequest,
     GetTaskResponse,
     TaskQueryParams,
-    CancelTaskRequest, 
+    CancelTaskRequest,
     CancelTaskResponse
 )
 from common.client.client import A2AClient
@@ -422,12 +424,13 @@ async def send_message(
 ) -> Dict[str, Any]:
     """
     Send a message to an A2A agent.
-    
+
     Args:
         agent_url: URL of the A2A agent
         message: Message to send
         session_id: Optional session ID for multi-turn conversations
-        
+            (mapped to message.contextId in A2A v0.3+)
+
     Returns:
         Agent's response with task_id for future reference
     """
@@ -436,105 +439,105 @@ async def send_message(
             "status": "error",
             "message": f"Agent not registered: {agent_url}",
         }
-    
+
     # Create a client for the agent
     client = A2AClient(url=agent_url)
-    
+
     try:
-        # Generate a task ID
-        task_id = str(uuid.uuid4())
-        
-        # Store the mapping of task_id to agent_url for later reference
-        task_agent_mapping[task_id] = agent_url
-        
-        # Create the message
+        # Create the message with v0.3+ fields (messageId auto-generated,
+        # sessionId moves into contextId)
         a2a_message = Message(
             role="user",
             parts=[TextPart(text=message)],
+            contextId=session_id,
         )
-        
+
         if ctx:
             await ctx.info(f"Sending message to agent: {message}")
-        
-        # Create payload as a single dictionary
+
+        # Build v0.3+ payload (message/send) — no client-side task ID
         payload = {
-            "id": task_id,
             "message": a2a_message,
         }
-        if session_id:
-            payload["sessionId"] = session_id
-        
-        # Send the task with the payload
-        result = await client.send_task(payload)
-        
-        # Save task mapping to disk
-        save_to_json(task_agent_mapping, TASK_AGENT_MAPPING_FILE)
-        
-        # Debug: Print the raw response for analysis
+
+        # Send using new protocol (message/send)
+        result = await client.send_message(payload)
+
         if ctx:
             await ctx.info(f"Raw response: {result}")
-            
-        # Create a response dictionary with as much info as we can extract
+
         response = {
             "status": "success",
-            "task_id": task_id,
         }
-        
-        # Add any available fields from the result
-        if hasattr(result, "sessionId"):
-            response["session_id"] = result.sessionId
+
+        # Extract task from the JSON-RPC response
+        task = result.result
+
+        if task:
+            # In v0.3+, the server generates the task ID
+            task_id = getattr(task, "id", None)
+            response["task_id"] = task_id
+
+            # Store mapping for later retrieval (get_task_result, cancel_task)
+            if task_id:
+                task_agent_mapping[task_id] = agent_url
+                save_to_json(task_agent_mapping, TASK_AGENT_MAPPING_FILE)
+
+            # Session ID
+            response["session_id"] = getattr(task, "sessionId", None)
+
+            # Task state
+            try:
+                if hasattr(task, "status") and hasattr(task.status, "state"):
+                    response["state"] = task.status.state
+                else:
+                    response["state"] = "unknown"
+            except Exception as e:
+                response["state"] = f"error_getting_state: {str(e)}"
+
+            # Response message from status
+            try:
+                if (hasattr(task, "status") and hasattr(task.status, "message")
+                        and task.status.message):
+                    response_text = ""
+                    for part in task.status.message.parts:
+                        if getattr(part, "type", None) == "text":
+                            response_text += part.text
+                    if response_text:
+                        response["message"] = response_text
+            except Exception as e:
+                response["message_error"] = f"Error extracting message: {str(e)}"
+
+            # Artifacts
+            try:
+                if hasattr(task, "artifacts") and task.artifacts:
+                    artifacts_data = []
+                    for artifact in task.artifacts:
+                        artifact_data = {
+                            "name": getattr(artifact, "name", "unnamed_artifact"),
+                            "contents": [],
+                        }
+                        for part in artifact.parts:
+                            part_type = getattr(part, "type", None)
+                            if part_type == "text":
+                                artifact_data["contents"].append({
+                                    "type": "text", "text": part.text,
+                                })
+                            elif part_type == "data":
+                                artifact_data["contents"].append({
+                                    "type": "data", "data": part.data,
+                                })
+                        artifacts_data.append(artifact_data)
+                    response["artifacts"] = artifacts_data
+            except Exception as e:
+                response["artifacts_error"] = f"Error extracting artifacts: {str(e)}"
         else:
-            response["session_id"] = None
-            
-        # Try to get the state
-        try:
-            if hasattr(result, "status") and hasattr(result.status, "state"):
-                response["state"] = result.status.state
+            response["task_id"] = None
+            if hasattr(result, "error") and result.error:
+                response["error"] = result.error.message
             else:
-                response["state"] = "unknown"
-        except Exception as e:
-            response["state"] = f"error_getting_state: {str(e)}"
-            
-        # Try to extract response message
-        try:
-            if hasattr(result, "status") and hasattr(result.status, "message") and result.status.message:
-                response_text = ""
-                for part in result.status.message.parts:
-                    if part.type == "text":
-                        response_text += part.text
-                if response_text:
-                    response["message"] = response_text
-        except Exception as e:
-            response["message_error"] = f"Error extracting message: {str(e)}"
-        
-        # Try to get artifacts
-        try:
-            if hasattr(result, "artifacts") and result.artifacts:
-                artifacts_data = []
-                for artifact in result.artifacts:
-                    artifact_data = {
-                        "name": artifact.name if hasattr(artifact, "name") else "unnamed_artifact",
-                        "contents": [],
-                    }
-                    
-                    for part in artifact.parts:
-                        if part.type == "text":
-                            artifact_data["contents"].append({
-                                "type": "text",
-                                "text": part.text,
-                            })
-                        elif part.type == "data":
-                            artifact_data["contents"].append({
-                                "type": "data",
-                                "data": part.data,
-                            })
-                    
-                    artifacts_data.append(artifact_data)
-                
-                response["artifacts"] = artifacts_data
-        except Exception as e:
-            response["artifacts_error"] = f"Error extracting artifacts: {str(e)}"
-            
+                response["error"] = "No result in response"
+
         return response
     except Exception as e:
         return {
@@ -614,59 +617,51 @@ async def get_task_result(
                     if hasattr(status, "message") and status.message:
                         response_text = ""
                         for part in status.message.parts:
-                            if part.type == "text":
+                            if getattr(part, "type", None) == "text":
                                 response_text += part.text
                         if response_text:
                             response["message"] = response_text
-                
+
                 # Extract artifacts
                 if hasattr(task, "artifacts") and task.artifacts:
                     artifacts_data = []
                     for artifact in task.artifacts:
                         artifact_data = {
-                            "name": artifact.name if hasattr(artifact, "name") else "unnamed_artifact",
+                            "name": getattr(artifact, "name", "unnamed_artifact"),
                             "contents": [],
                         }
-                        
                         for part in artifact.parts:
-                            if part.type == "text":
+                            part_type = getattr(part, "type", None)
+                            if part_type == "text":
                                 artifact_data["contents"].append({
-                                    "type": "text",
-                                    "text": part.text,
+                                    "type": "text", "text": part.text,
                                 })
-                            elif part.type == "data":
+                            elif part_type == "data":
                                 artifact_data["contents"].append({
-                                    "type": "data",
-                                    "data": part.data,
+                                    "type": "data", "data": part.data,
                                 })
-                        
                         artifacts_data.append(artifact_data)
-                    
                     response["artifacts"] = artifacts_data
-                
+
                 # Extract message history if available
                 if hasattr(task, "history") and task.history:
                     history_data = []
-                    for message in task.history:
+                    for msg in task.history:
                         message_data = {
-                            "role": message.role,
+                            "role": msg.role,
                             "parts": [],
                         }
-                        
-                        for part in message.parts:
-                            if part.type == "text":
+                        for part in msg.parts:
+                            part_type = getattr(part, "type", None)
+                            if part_type == "text":
                                 message_data["parts"].append({
-                                    "type": "text",
-                                    "text": part.text,
+                                    "type": "text", "text": part.text,
                                 })
-                            elif hasattr(part, "data"):
+                            elif part_type == "data":
                                 message_data["parts"].append({
-                                    "type": "data",
-                                    "data": part.data,
+                                    "type": "data", "data": part.data,
                                 })
-                        
                         history_data.append(message_data)
-                    
                     response["history"] = history_data
             else:
                 response["error"] = "No result in response"
@@ -760,154 +755,137 @@ async def send_message_stream(
 ) -> Dict[str, Any]:
     """
     Send a message to an A2A agent and stream the response.
-    
+
     Args:
         agent_url: URL of the A2A agent
         message: Message to send
         session_id: Optional session ID for multi-turn conversations
-        
+            (mapped to message.contextId in A2A v0.3+)
+
     Returns:
-        Stream of agent's responses
+        Accumulated agent responses with task_id for future reference
     """
     if agent_url not in registered_agents:
         return {
             "status": "error",
             "message": f"Agent not registered: {agent_url}",
         }
-    
+
     # Create a client for the agent
     client = A2AClient(url=agent_url)
-    
+
     try:
-        # Generate a task ID
-        task_id = str(uuid.uuid4())
-        
-        # Store the mapping of task_id to agent_url for later reference
-        task_agent_mapping[task_id] = agent_url
-        
-        # Save the task mapping to disk
-        save_to_json(task_agent_mapping, TASK_AGENT_MAPPING_FILE)
-        
-        # Create the message
+        # Create the message with v0.3+ fields
         a2a_message = Message(
             role="user",
             parts=[TextPart(text=message)],
+            contextId=session_id,
         )
-        
+
         if ctx:
             await ctx.info(f"Sending message to agent (streaming): {message}")
-            
-        # Start progress indication
-        if ctx:
             await ctx.info("Processing...")
-        
-        # Dictionary to accumulate streaming responses
+
+        # Accumulate streaming responses
         complete_response = {
             "status": "success",
-            "task_id": task_id,
+            "task_id": None,
             "session_id": session_id,
             "state": "working",
             "messages": [],
             "artifacts": [],
         }
-        
-        # Create payload as a single dictionary
+
+        # Build v0.3+ payload (message/stream) — no client-side task ID
         payload = {
-            "id": task_id,
             "message": a2a_message,
         }
-        if session_id:
-            payload["sessionId"] = session_id
-        
-        # Send the task and subscribe to updates
-        stream = client.send_task_streaming(payload)
-        
-        # Process and report stream events
+
+        # Send using new protocol (message/stream)
+        stream = client.send_message_streaming(payload)
+
+        # Process stream events
         try:
             all_events = []
-            
+
             async for event in stream:
-                # Save all events for debugging
                 all_events.append({
                     "type": str(type(event)),
                     "dir": str(dir(event)),
                 })
-                
-                if hasattr(event, "result"):
+
+                if hasattr(event, "result") and event.result:
+                    # Extract task_id from the first event that has one
+                    event_id = getattr(event.result, "id", None)
+                    if event_id and not complete_response["task_id"]:
+                        complete_response["task_id"] = event_id
+                        task_agent_mapping[event_id] = agent_url
+                        save_to_json(task_agent_mapping, TASK_AGENT_MAPPING_FILE)
+
                     if hasattr(event.result, "status"):
-                        # It's a TaskStatusUpdateEvent
+                        # TaskStatusUpdateEvent
                         status_event = event.result
-                        
-                        # Update the state
-                        if hasattr(status_event, "status") and hasattr(status_event.status, "state"):
+
+                        if (hasattr(status_event, "status")
+                                and hasattr(status_event.status, "state")):
                             complete_response["state"] = status_event.status.state
-                        
-                        # Extract any message
-                        if hasattr(status_event, "status") and hasattr(status_event.status, "message") and status_event.status.message:
+
+                        if (hasattr(status_event, "status")
+                                and hasattr(status_event.status, "message")
+                                and status_event.status.message):
                             message_text = ""
                             for part in status_event.status.message.parts:
-                                if part.type == "text":
+                                if getattr(part, "type", None) == "text":
                                     message_text += part.text
-                            
                             if message_text:
                                 complete_response["messages"].append(message_text)
                                 if ctx:
                                     await ctx.info(f"Agent: {message_text}")
-                        
-                        # If this is the final event, set session ID
-                        if hasattr(status_event, "final") and status_event.final:
-                            complete_response["session_id"] = getattr(status_event, "sessionId", session_id)
-                        
+
+                        if getattr(status_event, "final", False):
+                            complete_response["session_id"] = getattr(
+                                status_event, "sessionId", session_id
+                            )
+
                     elif hasattr(event.result, "artifact"):
-                        # It's a TaskArtifactUpdateEvent
+                        # TaskArtifactUpdateEvent
                         artifact_event = event.result
-                        
-                        # Extract artifact content
                         artifact_data = {
-                            "name": artifact_event.artifact.name if hasattr(artifact_event.artifact, "name") else "unnamed",
+                            "name": getattr(
+                                artifact_event.artifact, "name", "unnamed"
+                            ),
                             "contents": [],
                         }
-                        
                         for part in artifact_event.artifact.parts:
-                            if part.type == "text":
+                            part_type = getattr(part, "type", None)
+                            if part_type == "text":
                                 artifact_data["contents"].append({
-                                    "type": "text",
-                                    "text": part.text,
+                                    "type": "text", "text": part.text,
                                 })
-                            elif part.type == "data":
+                            elif part_type == "data":
                                 artifact_data["contents"].append({
-                                    "type": "data",
-                                    "data": part.data,
+                                    "type": "data", "data": part.data,
                                 })
-                        
                         complete_response["artifacts"].append(artifact_data)
-                        
                         if ctx:
-                            await ctx.info(f"Received artifact: {artifact_data['name']}")
+                            await ctx.info(
+                                f"Received artifact: {artifact_data['name']}"
+                            )
                 else:
-                    # Unknown event type, try to extract what we can
-                    complete_response["unknown_events"] = complete_response.get("unknown_events", []) + [
-                        {
-                            "type": str(type(event)),
-                            "dir": str(dir(event))
-                        }
-                    ]
-            
-            # Include debug info            
-            complete_response["_debug_info"] = {
-                "all_events": all_events
-            }
-            
+                    complete_response.setdefault("unknown_events", []).append({
+                        "type": str(type(event)),
+                        "dir": str(dir(event)),
+                    })
+
+            complete_response["_debug_info"] = {"all_events": all_events}
             return complete_response
         except Exception as e:
             return {
                 "status": "error",
                 "message": f"Error processing stream events: {str(e)}",
-                "_debug_info": {
-                    "all_events": all_events
-                }
+                "_debug_info": {"all_events": all_events},
             }
-            
+
     except Exception as e:
         return {
             "status": "error",
