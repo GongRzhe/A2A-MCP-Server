@@ -21,6 +21,8 @@ from common.types import (
     InvalidRequestError,
     JSONParseError,
     JSONRPCResponse,
+    MessageSendRequest,
+    MessageStreamRequest,
     SendTaskRequest,
     SendTaskStreamingRequest,
     SetTaskPushNotificationRequest,
@@ -74,9 +76,9 @@ class A2AServer:
 
             if isinstance(json_rpc_request, GetTaskRequest):
                 result = await self.task_manager.on_get_task(json_rpc_request)
-            elif isinstance(json_rpc_request, SendTaskRequest):
+            elif isinstance(json_rpc_request, (SendTaskRequest, MessageSendRequest)):
                 result = await self.task_manager.on_send_task(json_rpc_request)
-            elif isinstance(json_rpc_request, SendTaskStreamingRequest):
+            elif isinstance(json_rpc_request, (SendTaskStreamingRequest, MessageStreamRequest)):
                 result = await self.task_manager.on_send_task_subscribe(
                     json_rpc_request
                 )

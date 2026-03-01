@@ -63,10 +63,26 @@ class DataPart(BaseModel):
 Part = Annotated[TextPart | FilePart | DataPart, Field(discriminator='type')]
 
 
+def _normalize_parts_kind_to_type(data):
+    """Normalize 'kind' field to 'type' in parts for A2A SDK v0.3+ compatibility."""
+    if isinstance(data, dict) and 'parts' in data:
+        for part in data['parts']:
+            if isinstance(part, dict) and 'kind' in part and 'type' not in part:
+                part['type'] = part.pop('kind')
+    return data
+
+
 class Message(BaseModel):
     role: Literal['user', 'agent']
     parts: list[Part]
+    messageId: str = Field(default_factory=lambda: uuid4().hex)
+    contextId: str | None = None
     metadata: dict[str, Any] | None = None
+
+    @model_validator(mode='before')
+    @classmethod
+    def _normalize(cls, data):
+        return _normalize_parts_kind_to_type(data)
 
 
 class TaskStatus(BaseModel):
@@ -88,6 +104,11 @@ class Artifact(BaseModel):
     append: bool | None = None
     lastChunk: bool | None = None
 
+    @model_validator(mode='before')
+    @classmethod
+    def _normalize(cls, data):
+        return _normalize_parts_kind_to_type(data)
+
 
 class Task(BaseModel):
     id: str
@@ -99,16 +120,30 @@ class Task(BaseModel):
 
 
 class TaskStatusUpdateEvent(BaseModel):
-    id: str
+    id: str | None = None
     status: TaskStatus
     final: bool = False
     metadata: dict[str, Any] | None = None
 
+    @model_validator(mode='before')
+    @classmethod
+    def _normalize_id(cls, data):
+        if isinstance(data, dict) and not data.get('id'):
+            data['id'] = data.get('taskId') or data.get('task_id')
+        return data
+
 
 class TaskArtifactUpdateEvent(BaseModel):
-    id: str
+    id: str | None = None
     artifact: Artifact
     metadata: dict[str, Any] | None = None
+
+    @model_validator(mode='before')
+    @classmethod
+    def _normalize_id(cls, data):
+        if isinstance(data, dict) and not data.get('id'):
+            data['id'] = data.get('taskId') or data.get('task_id')
+        return data
 
 
 class AuthenticationInfo(BaseModel):
@@ -140,6 +175,20 @@ class TaskSendParams(BaseModel):
     acceptedOutputModes: list[str] | None = None
     pushNotification: PushNotificationConfig | None = None
     historyLength: int | None = None
+    metadata: dict[str, Any] | None = None
+
+
+class MessageSendConfiguration(BaseModel):
+    """Configuration for message/send and message/stream (A2A v0.3+)."""
+    acceptedOutputModes: list[str] | None = None
+    historyLength: int | None = None
+    pushNotificationConfig: PushNotificationConfig | None = None
+
+
+class MessageSendParams(BaseModel):
+    """Parameters for message/send and message/stream methods (A2A v0.3+)."""
+    message: Message
+    configuration: MessageSendConfiguration | None = None
     metadata: dict[str, Any] | None = None
 
 
@@ -187,6 +236,28 @@ class SendTaskStreamingRequest(JSONRPCRequest):
 
 
 class SendTaskStreamingResponse(JSONRPCResponse):
+    result: TaskStatusUpdateEvent | TaskArtifactUpdateEvent | None = None
+
+
+class MessageSendRequest(JSONRPCRequest):
+    """JSON-RPC request for message/send method (A2A v0.3+)."""
+    method: Literal['message/send'] = 'message/send'
+    params: MessageSendParams
+
+
+class MessageSendResponse(JSONRPCResponse):
+    """JSON-RPC response for message/send method (A2A v0.3+)."""
+    result: Task | None = None
+
+
+class MessageStreamRequest(JSONRPCRequest):
+    """JSON-RPC request for message/stream method (A2A v0.3+)."""
+    method: Literal['message/stream'] = 'message/stream'
+    params: MessageSendParams
+
+
+class MessageStreamResponse(JSONRPCResponse):
+    """JSON-RPC response for message/stream method (A2A v0.3+)."""
     result: TaskStatusUpdateEvent | TaskArtifactUpdateEvent | None = None
 
 
@@ -238,12 +309,14 @@ class TaskResubscriptionRequest(JSONRPCRequest):
 A2ARequest = TypeAdapter(
     Annotated[
         SendTaskRequest
+        | MessageSendRequest
         | GetTaskRequest
         | CancelTaskRequest
         | SetTaskPushNotificationRequest
         | GetTaskPushNotificationRequest
         | TaskResubscriptionRequest
-        | SendTaskStreamingRequest,
+        | SendTaskStreamingRequest
+        | MessageStreamRequest,
         Field(discriminator='method'),
     ]
 )

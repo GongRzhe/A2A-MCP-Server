@@ -19,6 +19,10 @@ from common.types import (
     GetTaskRequest,
     GetTaskResponse,
     JSONRPCRequest,
+    MessageSendRequest,
+    MessageSendResponse,
+    MessageStreamRequest,
+    MessageStreamResponse,
     SendTaskRequest,
     SendTaskResponse,
     SendTaskStreamingRequest,
@@ -63,12 +67,43 @@ class A2AClient:
                 except httpx.RequestError as e:
                     raise A2AClientHTTPError(400, str(e)) from e
 
-    async def _send_request(self, request: JSONRPCRequest) -> dict[str, Any]:
+    async def send_message(self, payload: dict[str, Any]) -> MessageSendResponse:
+        """Send a message using A2A v0.3+ message/send method."""
+        request = MessageSendRequest(params=payload)
+        return MessageSendResponse(
+            **await self._send_request(request, exclude_none=True)
+        )
+
+    async def send_message_streaming(
+        self, payload: dict[str, Any]
+    ) -> AsyncIterable[MessageStreamResponse]:
+        """Stream responses using A2A v0.3+ message/stream method."""
+        request = MessageStreamRequest(params=payload)
+        with httpx.Client(timeout=None) as client:
+            with connect_sse(
+                client,
+                'POST',
+                self.url,
+                json=request.model_dump(exclude_none=True),
+            ) as event_source:
+                try:
+                    for sse in event_source.iter_sse():
+                        yield MessageStreamResponse(**json.loads(sse.data))
+                except json.JSONDecodeError as e:
+                    raise A2AClientJSONError(str(e)) from e
+                except httpx.RequestError as e:
+                    raise A2AClientHTTPError(400, str(e)) from e
+
+    async def _send_request(
+        self, request: JSONRPCRequest, exclude_none: bool = False
+    ) -> dict[str, Any]:
         async with httpx.AsyncClient() as client:
             try:
                 # Image generation could take time, adding timeout
                 response = await client.post(
-                    self.url, json=request.model_dump(), timeout=self.timeout
+                    self.url,
+                    json=request.model_dump(exclude_none=exclude_none),
+                    timeout=self.timeout,
                 )
                 response.raise_for_status()
                 return response.json()
